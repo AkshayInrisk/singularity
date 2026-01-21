@@ -55,8 +55,7 @@ def termsheet_id(df, exclude_columns=None, repo_path='.',
         exclude_columns = []
 
     # Git version and timestamp
-    # model_version = Repo(repo_path).head.commit.hexsha
-    model_version = "v1_manual"
+    model_version = Repo(repo_path).head.commit.hexsha
     run_time = datetime.now().isoformat(timespec='microseconds')
 
     # Drop excluded columns for hash computation
@@ -75,9 +74,7 @@ def termsheet_id(df, exclude_columns=None, repo_path='.',
     df_new['model_version'] = model_version
     df_new['run_time'] = run_time
 
-    # Setup GCS client (uses Application Default Credentials on Cloud Run)
-    if str(os.environ.get('ENABLE_USAGE_LOGS','0')).lower() not in {'1','true','yes'}:
-        return df_new
+    
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_path)

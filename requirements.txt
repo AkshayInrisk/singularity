@@ -13,4 +13,3 @@ scipy==1.11.4
 db-dtypes
 xlsxwriter
 GitPython
-zipfile

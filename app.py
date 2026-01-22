@@ -13,7 +13,7 @@ app = Flask(__name__)
 APP_DIR = Path(__file__).resolve().parent
 BASE_WORKDIR = Path(os.environ.get("WORKING_BASE", "/tmp/singularity_work"))
 
-# You can increase if needed; Cloud Run timeout must also be >= this
+# Cloud Run request timeout must be >= this
 PIPELINE_TIMEOUT_SECONDS = int(os.environ.get("PIPELINE_TIMEOUT_SECONDS", "1700"))
 
 
@@ -23,7 +23,11 @@ def health():
         "status": "ok",
         "service": "singularity-inrisk",
         "usage": {
-            "POST /run": "multipart/form-data with file=<csv>, optional termsheet/pdf fields"
+            "POST /run": (
+                "multipart/form-data with file=<csv> (required), "
+                "data_working_zip=<zip> (optional; must contain Data_Working/...), "
+                "optional termsheet/pdf fields"
+            )
         }
     }), 200
 
@@ -36,6 +40,19 @@ def zip_dir_to_bytes(dir_path: Path) -> io.BytesIO:
                 zf.write(p, arcname=str(p.relative_to(dir_path)))
     buf.seek(0)
     return buf
+
+
+def safe_extract_zip_to_dir(zip_path: Path, dest_dir: Path) -> None:
+    """
+    Extract zip into dest_dir safely (prevents Zip Slip).
+    """
+    dest_dir_resolved = dest_dir.resolve()
+    with zipfile.ZipFile(str(zip_path), "r") as z:
+        for member in z.namelist():
+            target_path = (dest_dir / member).resolve()
+            if not str(target_path).startswith(str(dest_dir_resolved)):
+                raise ValueError(f"Unsafe zip entry: {member}")
+        z.extractall(str(dest_dir))
 
 
 @app.post("/run")
@@ -67,16 +84,47 @@ def run():
     input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # pipeline expects exactly this filename:
-    input_csv_path = input_dir / "product_input.csv"
-    upload.save(str(input_csv_path))
-
-    env = os.environ.copy()
-    env["WORKING_DIR"] = str(workdir)
-    env["TERMSHEET"] = str(termsheet)
-    env["PDF"] = str(pdf)
-
     try:
+        # pipeline expects exactly this filename:
+        input_csv_path = input_dir / "product_input.csv"
+        upload.save(str(input_csv_path))
+
+        # OPTIONAL: upload cached Data_Working as a zip to skip BigQuery
+        if "data_working_zip" in request.files and request.files["data_working_zip"].filename:
+            zf_upload = request.files["data_working_zip"]
+            zname = (zf_upload.filename or "").lower()
+
+            if not zname.endswith(".zip"):
+                shutil.rmtree(workdir, ignore_errors=True)
+                return jsonify({
+                    "status": "failed",
+                    "error": "data_working_zip must be a .zip file"
+                }), 400
+
+            zip_path = workdir / "data_working.zip"
+            zf_upload.save(str(zip_path))
+
+            # Extract into output_dir so pipeline can find output_dir/Data_Working/*
+            safe_extract_zip_to_dir(zip_path, output_dir)
+
+            # Validate expected cache exists
+            risk_parquet = output_dir / "Data_Working" / "Risk_Datas.parquet"
+            if not risk_parquet.exists():
+                shutil.rmtree(workdir, ignore_errors=True)
+                return jsonify({
+                    "status": "failed",
+                    "error": (
+                        "Zip extracted, but output/Data_Working/Risk_Datas.parquet was not found. "
+                        "Your zip must contain a top-level folder named 'Data_Working/' "
+                        "with Risk_Datas.parquet and related cache files inside."
+                    )
+                }), 400
+
+        env = os.environ.copy()
+        env["WORKING_DIR"] = str(workdir)
+        env["TERMSHEET"] = str(termsheet)
+        env["PDF"] = str(pdf)
+
         proc = subprocess.run(
             ["python", "pipeline.py"],
             cwd=str(APP_DIR),
@@ -85,17 +133,25 @@ def run():
             text=True,
             timeout=PIPELINE_TIMEOUT_SECONDS,
         )
+
     except subprocess.TimeoutExpired:
         shutil.rmtree(workdir, ignore_errors=True)
         return jsonify({
             "status": "failed",
             "error": f"Pipeline timed out after {PIPELINE_TIMEOUT_SECONDS}s"
         }), 504
+    except ValueError as e:
+        # zip safety / validation errors end up here too
+        shutil.rmtree(workdir, ignore_errors=True)
+        return jsonify({
+            "status": "failed",
+            "error": str(e)
+        }), 400
     except Exception as e:
         shutil.rmtree(workdir, ignore_errors=True)
         return jsonify({
             "status": "failed",
-            "error": f"Failed to start pipeline: {type(e).__name__}: {e}"
+            "error": f"Failed to run: {type(e).__name__}: {e}"
         }), 500
 
     if proc.returncode != 0:
@@ -109,7 +165,6 @@ def run():
 
     # ---- Return outputs as download (ZIP) ----
     try:
-        # if pipeline produced nothing, fail clearly
         has_any_file = any(p.is_file() for p in output_dir.rglob("*"))
         if not has_any_file:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -123,7 +178,6 @@ def run():
         # cleanup after zip is built in memory
         shutil.rmtree(workdir, ignore_errors=True)
 
-        # Download prompt: client saves it (browser usually goes to Downloads automatically)
         return send_file(
             zip_bytes,
             as_attachment=True,

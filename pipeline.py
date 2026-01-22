@@ -1224,7 +1224,7 @@ if run_analytics == 1:
                     ## E.g. if cover is required for 4, 8, 12 days, then 
                     # per_level_size = 4; Num_levels = 3; Deductible = 0 (in proportion of per level size)
 
-                    if RU_Cover in ["GTE-HT_NHDVAR", "GTE-LT_NCDVAR", "GTE-ERH_NHRHDVAR", "GTE-HT_CHDVAR", "GTE-DRH_NLRHDVAR", "GTE-ER_CWDVAR",
+                    if RU_Cover in ["GTE-HT_NHDVAR", "GTE-LT_NCDVAR", "GTE-ERH_NHRHDVAR", "GTE-HT_CHDVAR", "GTE-DRH_NLRHDVAR", "GTE-ER_CWDVAR", "GTE-DR_CCDVAR",
                                     "GTE-ERH_CHRHDVAR", "GTE-ER_NWDVAR", "GTE-HT_NAHTVAR", "GTE-HT_PAHTVAR", "GTE-HT_PDHTVAR","GTE-HT_CPHTVAR", "GTE-ER_NWXDVAR", "GTE-ER_NWXDCONTVAR", 
                                     "GTE-HT_NHXDVAR"]:
                         levels_list = [deductible, num_levels, per_level_size]
@@ -1272,7 +1272,7 @@ if run_analytics == 1:
                     elif RU_Cover in ("GTE-ER_NWDVAR", "GTE-ER_CWDVAR"):
                         RU_cover_data = RU_DF['parameter']
                         cover_threshold = min(max(round(np.percentile(RU_DF["parameter"], (100 - min(Cover_PR*500, 100))), -1), cover_threshold_min), cover_threshold_max)
-                    elif RU_Cover in ("GTE-LT_NCDVAR", "GTE-LT_CCDVAR"):
+                    elif RU_Cover in ("GTE-LT_NCDVAR", "GTE-LT_CCDVAR", "GTE-DR_CCDVAR"):
                         RU_cover_data = RU_DF['parameter']
                         cover_threshold = min(max(round(np.percentile(RU_DF["parameter"], min(Cover_PR*500, 100)), 1), cover_threshold_min), cover_threshold_max)
                     elif RU_Cover == "LTE-LSM_NASMVAR":
@@ -1308,7 +1308,7 @@ if run_analytics == 1:
                             si_list = [base_payout, per_level_payout, discrete_payout]
 
                         elif RU_Cover in ("GTE-HT_NHDVAR", "GTE-HT_CHDVAR", "GTE-ERH_NHRHDVAR", "GTE-ERH_CHRHDVAR", 
-                                            "GTE-LT_NCDVAR", "GTE-LT_CCDVAR", "GTE-DRH_NLRHDVAR", "GTE-ER_NWDVAR", "GTE-ER_CWDVAR", "GTE-HT_CPHTVAR"):
+                                            "GTE-LT_NCDVAR", "GTE-LT_CCDVAR", "GTE-DRH_NLRHDVAR", "GTE-ER_NWDVAR", "GTE-ER_CWDVAR", "GTE-DR_CCDVAR", "GTE-HT_CPHTVAR"):
                             xval =[(RU_Cover, cover_threshold)]
 
                         elif RU_Cover in ("GTE-HT_NHXDVAR", "GTE-ER_NWXDVAR"):
@@ -1353,7 +1353,7 @@ if run_analytics == 1:
                             cover_threshold = round(cover_threshold + 0.1, 1)
                         elif RU_Cover in ("GTE-HT_PDHTVAR"):
                             cover_threshold = round(cover_threshold + 1, 0)
-                        elif RU_Cover in ("GTE-LT_NCDVAR", "GTE-LT_CCDVAR"):
+                        elif RU_Cover in ("GTE-LT_NCDVAR", "GTE-LT_CCDVAR", "GTE-DR_CCDVAR"):
                             cover_threshold = round(cover_threshold - 0.1, 1)                    
                         elif RU_Cover in ("GTE-ERH_NHRHDVAR", "GTE-ERH_CHRHDVAR"):
                             cover_threshold = round(cover_threshold + 1, 0)

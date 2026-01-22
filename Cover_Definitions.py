@@ -47,7 +47,7 @@ def DR_NDD(df, xval):
     return df, max_criteria, cover_name
 
 ## Consecutive Dry Days
-def DR_CDD(df, xval):
+def DR_CDDVAR(df, xval):
     val = float(xval)
     df.loc[:, 'TARGET_DAY'] = np.where(df['parameter'] <= val, 1, 0)
     df['time'] = pd.to_datetime(df['time'], format='%d-%m-%y')
@@ -66,6 +66,7 @@ def DR_CDD(df, xval):
     
     max_criteria = "phase_len"
     cover_name = "Number of Consecutive Dry Days (rainfall <= " + str(val) + " mm)"
+
     return df, max_criteria, cover_name
 
 ### Deficit Rainfall Ends ###
